@@ -5,87 +5,86 @@ class HashTable:
     def __init__(self, values: List[object], memory_size: int, block_size: int) -> None:
         # Calculate the maximum address based on memory size and block size
         self.max_address = memory_size // block_size
-
-        # Initialize the hash tables and the shared database
-        self.size_block_table = {}  # Hash table indexed on size of blocks
         self.allocated_block_table = {}  # Hash table indexed on starting address of allocated blocks
-        self.database = {}  # Shared database to store memory blocks
+        self.database = {0:self.max_address}  # Shared database to store memory blocks
+        self.free_block = {0:self.max_address}
+        for val in values:
+            self.insert(val,block_size)
 
-        # Populate hash tables and database with initial set of memory-block allocations and releases
-        for value in values:
-            self.insert(value)
+    def insert(self, value: dict):
+        start_address = value.get('start_address')
+        size = value.get('size')
+
+        # Step 1: Check if the start address and size are valid
+        if start_address is None or size is None:
+            raise ValueError("Invalid start address or size")
+        if start_address < 0 or start_address >= self.max_address:
+            raise ValueError("Invalid start address")
+        if size <= 0:
+            raise ValueError("Invalid size")
+
+        # Step 2: Check if the start address is already in the allocated block table
+        if start_address in self.allocated_block_table:
+            raise ValueError("Start address already allocated")
+
+        # Step 3: Update the allocated block table
+        end_address = start_address + size
+        self.allocated_block_table[start_address] = end_address
+
+        # Step 4: Update the database by splitting existing blocks
+        new_block = [start_address, end_address]
+        for block_start, block_end in list(self.database.items()):
+            if block_start < new_block[1] and block_end > new_block[0]:
+                # Split the existing block into two separate blocks
+                if block_start < new_block[0]:
+                    self.database[block_start] = new_block[0]
+                if block_end > new_block[1]:
+                    self.database[new_block[1]] = block_end
+
+        # Step 5: Update the free block table by removing or splitting blocks
+        for block_start, block_end in list(self.free_block.items()):
+            if block_start < new_block[1] and block_end > new_block[0]:
+                # Remove the block from the free block table
+                del self.free_block[block_start]
+
+                # Split the existing block into two separate blocks
+                if block_start < new_block[0]:
+                    self.free_block[block_start] = new_block[0]
+                if block_end > new_block[1]:
+                    self.free_block[new_block[1]] = block_end
+
+
 
     def delete(self, value: object) -> bool:
-        # Delete an existing value from the hash tables and the shared database
-        delete_block = value
-        delete_block_starting_address = value["starting_address"]
-        delete_block_size = value['size']
-        target_block = self.query(value)
-        if not target_block:
-            return False
+        # the value should be a dict which contain the start_address and size
+        # if consider
+        #     # before insert [8,10]
+        #        the allocated_block_table is [4,16] the database is [0,4],[4,16],[16,memory_size // block_size], the free_block is [0,4],[16,memory_size // block_size]
+        # after delete [8,10]
+        # the allocated_block_table is [4,8], [10,16] the database is [0,4],[4,8],8,10], [10,16],[16,memory_size // block_size], the free_block is [0,4],[8,10],[16,memory_size // block_size]
+        #     # we need consider that the allocated_block_table, database,free_block  is not overlap
+        #     # Note:　u need to update allocated_block_table,database, free_block
+        pass
 
-        starting_address = target_block["starting_address"]
-        size = target_block['size']
-        ending_address = starting_address + size
+    def query(self, key: int) -> bool:
+        # using address which is in allocated_block_table
+        # if input is 1 and the allocated_block_table is [0,20]
+        # return True
+        pass
 
-        self.database.pop(starting_address)
-        self.allocated_block_table.pop(starting_address)
-
-        if starting_address < delete_block_starting_address:
-            left_block_size = delete_block_starting_address - starting_address
-            left_block = {'starting_address': starting_address, 'size': left_block_size}
-            self.insert(left_block)
-
-        if ending_address > delete_block_starting_address + delete_block_size:
-            right_block_starting_address = delete_block_starting_address + delete_block_size
-            right_block_size = ending_address - right_block_starting_address
-            right_block = {'starting_address': right_block_starting_address, 'size': right_block_size}
-            self.insert(right_block)
-        self.delete(value)
-        return True
-
-
-
-    def insert(self, value: object):
-        # Insert a new value into the hash tables and the shared database
-        starting_address, size = value['starting_address'], value['size']
-
-        # Check if the starting address is within the valid range
-        if starting_address < 0 or starting_address >= self.max_address:
-            raise ValueError("Invalid starting address.")
-
-        # Check if the memory block overlaps with any existing allocated blocks
-        for allocated_starting_address, allocated_size in self.allocated_block_table.items():
-            allocated_end_address = allocated_starting_address + allocated_size - 1
-            if starting_address <= allocated_end_address and starting_address + size - 1 >= allocated_starting_address:
-                raise ValueError("Memory block overlaps with an existing allocated block.")
-
-        # Add the memory block to the allocated_block_table
-        self.allocated_block_table[starting_address] = size
-
-        # Remove the memory block from the free_block_table if it was previously marked as free
-        if starting_address in self.free_block_table:
-            del self.free_block_table[starting_address]
-
-        # Add the memory block to the size_block_table
-        if size in self.size_block_table:
-            self.size_block_table[size].append(starting_address)
-        else:
-            self.size_block_table[size] = [starting_address]
-
-        # Add the memory block to the database
-        self.database[starting_address] = value
-
-    def query(self, key: object) -> bool:
-        # Query by key in the hash tables and the shared database
-        starting_address = key["starting_address"]
-        size = key["size"]
-
-        # Check if the specified block is in the allocated_block_table
-        if starting_address in self.allocated_block_table and self.allocated_block_table[starting_address] == size:
-            return True
-
-        # Find the memory block that contains the desired key
-        for target_starting_address, size in self.allocated_block_table.items():
-            if target_starting_address + size > starting_address
-        return False
+    # def insert(self, value: object):
+    #     # the value should be a dict which contain the start_address and size
+    #     # if consider the address is init, the database is [0, memory_size // block_size]
+    #     # value = {start_address = 4, size = 12}
+    #     # that mean insert[4,16]
+    #     # before insert [4,16]
+    #     # the allocated_block_table is Empty
+    #     # the database is [0,memory_size // block_size],
+    #     # the free_block is [0,memory_size // block_size],
+    #     # after insert [4,16]
+    #     # the allocated_block_table is [4,16]
+    #     # the database is [0,4],[4,16],[16,memory_size // block_size],
+    #     # the free_block is [0,4],[16,memory_size // block_size]
+    #     # we need consider that the allocated_block_table is not overlap
+    #     # Note:　u need to update allocated_block_table,database, free_block
+    #     pass
