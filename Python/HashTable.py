@@ -64,13 +64,35 @@ class HashTable:
         # the allocated_block_table is [4,8], [10,16] the database is [0,4],[4,8],8,10], [10,16],[16,memory_size // block_size], the free_block is [0,4],[8,10],[16,memory_size // block_size]
         #     # we need consider that the allocated_block_table, database,free_block  is not overlap
         #     # Note:　u need to update allocated_block_table,database, free_block
+        start_address = value["start_address"]
+        end_address = start_address+ value["size"]
+        target = self.query(start_address)
+        target2  =  self.query(start_address)
+        if target != target2:
+            self.delete({"start_address": target["start_address"]+target["size"], "size":value["size"]-target["size"]})
+        # del self.query((start_address))
         pass
 
     def query(self, key: int) -> bool:
-        # using address which is in allocated_block_table
-        # if input is 1 and the allocated_block_table is [0,20]
-        # return True
-        pass
+        keys = sorted(self.allocated_block_table.keys())  # Sort the keys in ascending order
+
+        if key < keys[0]:  # Key is smaller than the smallest key
+            return False
+
+        left = 0
+        right = len(keys) - 1
+
+        while left < right:
+            mid = (left + right) // 2  # Calculate the middle index
+
+            if keys[mid] <= key < keys[mid + 1]:  # Key is between the current and next key
+                return True
+            elif keys[mid] <= key:  # Key is in the right half
+                left = mid + 1
+            else:  # Key is in the left half
+                right = mid
+
+        return False  # Key not found
 
     # def insert(self, value: object):
     #     # the value should be a dict which contain the start_address and size
